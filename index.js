@@ -84,16 +84,24 @@ function drawScene(gl, programInfo, objects) {
   const zNear = 0.1;
   const zFar = 100.0;
   let projectionMatrix = mat4.create();
+  let lookAt = mat4.create();
 
   mat4.perspective(projectionMatrix,
-                   fieldOfView,
-                   aspect,
-                   zNear,
-                   zFar);
+    fieldOfView,
+    aspect,
+    zNear,
+    zFar);
 
-  mat4.translate(projectionMatrix,
-  projectionMatrix,
-  [0.0, 0.0, -6.0]);
+    mat4.lookAt(lookAt, 
+    [0.0, 4.0, -12.0],
+    [0.0, 0.0,  0.0],
+    [0.0, 1.0,  0.0]);
+
+  mat4.multiply(projectionMatrix, projectionMatrix, lookAt);
+
+  // mat4.translate(projectionMatrix,
+  // projectionMatrix,
+  // [0.0, -2.0, -6.0]);
 
   objects.forEach((o => drawObject(gl, programInfo, o, projectionMatrix)));
 
