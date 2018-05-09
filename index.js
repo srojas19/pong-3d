@@ -20,14 +20,10 @@ const fs = `
   }
 `;
 
-let playerMatrix = mat4.create();
-let oponentMatrix = mat4.create();
-let ballMatrix = mat4.create();
-let proyectionMatrix = mat4.create();
-
+main();
 
 function main() {
-  const canvas = document.querySelector('#glcanvas');
+  const canvas = document.querySelector('#canvas');
   const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 
   if (!gl) {
@@ -48,6 +44,122 @@ function main() {
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
     },
   };
+
+  let gBox = createCuboid(gl, 1, 1, 1);
+  gBox.modelViewMatrix = mat4.create();
+  let gPlayer = createCuboid(gl, 1, 1, 1);
+  gPlayer.modelViewMatrix = mat4.create();
+  let gOpponent = createCuboid(gl, 1, 1, 1);
+  gOpponent.modelViewMatrix = mat4.create();
+  let gBall = createCuboid(gl, 0.1, 0.1, 0.1);
+  gBall.modelViewMatrix = mat4.create();
+
+  let objects = [gBox, gPlayer, gOpponent, gBall];
+
+  var then = 0;
+  function render(now) {
+    now *= 0.001;
+    const deltaTime = now - then;
+    then = now;
+
+    drawScene(gl, programInfo, objects);
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+  
+}
+
+function drawScene(gl, programInfo, objects) {
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+  gl.clearDepth(1.0);                 // Clear everything
+  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
+  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+
+  // Clear the canvas before we start drawing on it.
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  const fieldOfView = 45 * Math.PI / 180;   // in radians
+  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+  const zNear = 0.1;
+  const zFar = 100.0;
+  let projectionMatrix = mat4.create();
+
+  mat4.perspective(projectionMatrix,
+                   fieldOfView,
+                   aspect,
+                   zNear,
+                   zFar);
+
+  mat4.translate(projectionMatrix,
+  projectionMatrix,
+  [0.0, 0.0, -6.0]);
+
+  objects.forEach((o => drawObject(gl, programInfo, o, projectionMatrix)));
+
+}
+
+function drawObject(gl, programInfo, object, projectionMatrix) {
+
+  // Tell WebGL how to pull out the positions from the position
+  // buffer into the vertexPosition attribute
+  {
+    const numComponents = 3;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, object.position);
+    gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexPosition,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+    gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexPosition);
+  }
+
+  {
+    const numComponents = 4;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, object.color);
+    gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexColor,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+    gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexColor);
+  }
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, object.indices);
+
+  gl.useProgram(programInfo.program);
+
+  // Set the shader uniforms
+
+  gl.uniformMatrix4fv(
+      programInfo.uniformLocations.projectionMatrix,
+      false,
+      projectionMatrix);
+  gl.uniformMatrix4fv(
+      programInfo.uniformLocations.modelViewMatrix,
+      false,
+      object.modelViewMatrix);
+
+  {
+    const vertexCount = 36;
+    const type = gl.UNSIGNED_SHORT;
+    const offset = 0;
+    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+  }
 }
 
 function initShaderProgram(gl, vsSource, fsSource) {
@@ -125,11 +237,11 @@ function createCuboid(gl, x, y, z) {
 
   const faceColors = [
     [1.0, 1.0, 1.0, 1.0],    // Front face: white
-    [1.0, 0.0, 0.0, 1.0],    // Back face: red
-    [0.0, 1.0, 0.0, 1.0],    // Top face: green
-    [0.0, 0.0, 1.0, 1.0],    // Bottom face: blue
-    [1.0, 1.0, 0.0, 1.0],    // Right face: yellow
-    [1.0, 0.0, 1.0, 1.0],    // Left face: purple
+    [1.0, 1.0, 1.0, 1.0],    // Back face: red
+    [1.0, 1.0, 1.0, 1.0],    // Top face: green
+    [1.0, 1.0, 1.0, 1.0],    // Bottom face: blue
+    [1.0, 1.0, 1.0, 1.0],    // Right face: yellow
+    [1.0, 1.0, 1.0, 1.0],    // Left face: purple
   ];
 
 
