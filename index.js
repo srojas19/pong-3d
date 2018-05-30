@@ -1,3 +1,6 @@
+import Game from "./game.js";
+import {createCuboid, createBox} from './graphics.js';
+
 const vs = `
   attribute vec4 aVertexPosition;
   attribute vec4 aVertexColor;
@@ -19,12 +22,22 @@ const fs = `
     gl_FragColor = vColor;
   }
 `;
+let game = new Game();
 
 main();
 
 function main() {
   const canvas = document.querySelector('#canvas');
+  const score = document.getElementById('score');
+  const paused = document.getElementById('paused');
+  
+  canvas.focus();
   const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+
+  window.addEventListener('keyup', (e) => game.key.onKeyup(e));
+  window.addEventListener('keydown', (e) => game.key.onKeydown(e));
+  window.addEventListener('keypress', (e) => {if(e.key == " ") game.pause()});
 
   if (!gl) {
     alert('Unable to initialize WebGL. Your browser or machine may not support it.');
@@ -45,13 +58,13 @@ function main() {
     },
   };
 
-  let gBox = createCuboid(gl, 1, 1, 1);
+  let gBox = createBox(gl, 10, 10, 20, 0.0);
   gBox.modelViewMatrix = mat4.create();
-  let gPlayer = createCuboid(gl, 1, 1, 1);
+  let gPlayer = createCuboid(gl, 1, 1, 0.1, 0.05);
   gPlayer.modelViewMatrix = mat4.create();
-  let gOpponent = createCuboid(gl, 1, 1, 1);
+  let gOpponent = createCuboid(gl, 1, 1, 0.1, 1.0);
   gOpponent.modelViewMatrix = mat4.create();
-  let gBall = createCuboid(gl, 0.1, 0.1, 0.1);
+  let gBall = createCuboid(gl, 0.25, 0.25, 0.25, 1.0);
   gBall.modelViewMatrix = mat4.create();
 
   let objects = [gBox, gPlayer, gOpponent, gBall];
@@ -61,7 +74,9 @@ function main() {
     now *= 0.001;
     const deltaTime = now - then;
     then = now;
-
+    game.update();
+    score.innerHTML = 'Player: ' + game.playerScore + " AI: " + game.aiScore;
+    paused.innerHTML = game.isPaused ? "PAUSED" : "";
     drawScene(gl, programInfo, objects);
     requestAnimationFrame(render);
   }
@@ -73,7 +88,8 @@ function drawScene(gl, programInfo, objects) {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+  // gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+  gl.depthFunc(gl.ALWAYS);            // Near things obscure far things
 
   // Clear the canvas before we start drawing on it.
 
@@ -92,22 +108,24 @@ function drawScene(gl, programInfo, objects) {
     zNear,
     zFar);
 
-    mat4.lookAt(lookAt, 
-    [0.0, 4.0, -12.0],
-    [0.0, 0.0,  0.0],
-    [0.0, 1.0,  0.0]);
+  mat4.lookAt(lookAt, 
+  [0.0, 2.0, 25.0],
+  [0.0, 0.0,  0.0],
+  [0.0, 1.0,  0.0]);
 
   mat4.multiply(projectionMatrix, projectionMatrix, lookAt);
 
-  // mat4.translate(projectionMatrix,
-  // projectionMatrix,
-  // [0.0, -2.0, -6.0]);
-
-  objects.forEach((o => drawObject(gl, programInfo, o, projectionMatrix)));
-
+  mat4.translate(objects[1].modelViewMatrix, mat4.create(), game.playerPosition);
+  mat4.translate(objects[2].modelViewMatrix, mat4.create(), game.aiPosition);
+  mat4.translate(objects[3].modelViewMatrix, mat4.create(), game.ballPosition);
+  
+  drawObject(gl, programInfo, objects[0], projectionMatrix,gl.LINES);
+  for (let i = 1; i <= 3; i++) {
+    drawObject(gl, programInfo, objects[i], projectionMatrix,gl.TRIANGLES);
+  }
 }
 
-function drawObject(gl, programInfo, object, projectionMatrix) {
+function drawObject(gl, programInfo, object, projectionMatrix, drawMode) {
 
   // Tell WebGL how to pull out the positions from the position
   // buffer into the vertexPosition attribute
@@ -166,7 +184,7 @@ function drawObject(gl, programInfo, object, projectionMatrix) {
     const vertexCount = 36;
     const type = gl.UNSIGNED_SHORT;
     const offset = 0;
-    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+    gl.drawElements(drawMode, vertexCount, type, offset);
   }
 }
 
@@ -198,89 +216,3 @@ function loadShader(gl, type, source) {
   return shader;
 }
 
-function createCuboid(gl, x, y, z) {
-
-  const positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-  const positions = [
-    // Front face
-    -x, -x,  x,
-    x, -x,  x,
-    x,  x,  x,
-    -x,  x,  x,
-
-    // Back face
-    -x, -x, -x,
-    -x,  x, -x,
-    x,  x, -x,
-    x, -x, -x,
-
-    // Top face
-    -x,  x, -x,
-    -x,  x,  x,
-    x,  x,  x,
-    x,  x, -x,
-
-    // Bottom face
-    -x, -x, -x,
-    x, -x, -x,
-    x, -x,  x,
-    -x, -x,  x,
-
-    // Right face
-    x, -x, -x,
-    x,  x, -x,
-    x,  x,  x,
-    x, -x,  x,
-
-    // Left face
-    -x, -x, -x,
-    -x, -x,  x,
-    -x,  x,  x,
-    -x,  x, -x,
-  ];
-
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-  const faceColors = [
-    [1.0, 1.0, 1.0, 1.0],    // Front face: white
-    [1.0, 1.0, 1.0, 1.0],    // Back face: red
-    [1.0, 1.0, 1.0, 1.0],    // Top face: green
-    [1.0, 1.0, 1.0, 1.0],    // Bottom face: blue
-    [1.0, 1.0, 1.0, 1.0],    // Right face: yellow
-    [1.0, 1.0, 1.0, 1.0],    // Left face: purple
-  ];
-
-
-  var colors = [];
-  for (var j = 0; j < faceColors.length; ++j) {
-    const c = faceColors[j];
-    colors = colors.concat(c, c, c, c);
-  }
-
-  const colorBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-  
-  const indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-  const indices = [
-    0,  1,  2,      0,  2,  3,    // front
-    4,  5,  6,      4,  6,  7,    // back
-    8,  9,  10,     8,  10, 11,   // top
-    12, 13, 14,     12, 14, 15,   // bottom
-    16, 17, 18,     16, 18, 19,   // right
-    20, 21, 22,     20, 22, 23,   // left
-  ];
-  
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-
-  return {
-    position: positionBuffer,
-    color: colorBuffer,
-    indices: indexBuffer,
-  };
-}
